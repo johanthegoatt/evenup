@@ -103,8 +103,103 @@
     return bal;
   }
 
+  // Within a group whose balances add to zero, the biggest debtor pays the
+  // biggest creditor until everyone is square. Each payment clears at least
+  // one person, so k people need at most k - 1 payments.
+  function settleGreedy(entries) {
+    var givers = [], takers = [], out = [];
+    entries.forEach(function (e) {
+      if (e.cents < 0) givers.push({ id: e.id, left: -e.cents });
+      else if (e.cents > 0) takers.push({ id: e.id, left: e.cents });
+    });
+    var big = function (a, b) { return b.left - a.left || (a.id < b.id ? -1 : 1); };
+    while (givers.length && takers.length) {
+      givers.sort(big);
+      takers.sort(big);
+      var g = givers[0], t = takers[0];
+      var amt = Math.min(g.left, t.left);
+      out.push({ from: g.id, to: t.id, amount: amt });
+      g.left -= amt;
+      t.left -= amt;
+      if (!g.left) givers.shift();
+      if (!t.left) takers.shift();
+    }
+    return out;
+  }
+
+  // Fewest payments that square everyone up. Finding it is NP-hard
+  // (Verhoeff, "Settling Multiple Debts Efficiently", 2004), but the answer
+  // is n - g, where g is the most groups the n non-zero people can be split
+  // into such that each group adds to zero on its own. For a dinner-sized
+  // group a DP over subsets finds g exactly:
+  //   best[mask] = max over i in mask of best[mask - i], plus 1 if mask sums to 0.
+  // Past EXACT_LIMIT people it falls back to one greedy pass (at most n - 1).
+  var EXACT_LIMIT = 16;
+
+  function settle(bal) {
+    var entries = Object.keys(bal)
+      .filter(function (id) { return bal[id] !== 0; })
+      .map(function (id) { return { id: id, cents: bal[id] }; });
+    var total = entries.reduce(function (s, e) { return s + e.cents; }, 0);
+    if (total !== 0) throw new Error("balances add up to " + total + ", not 0");
+    var n = entries.length;
+    if (n === 0) return { payments: [], exact: true };
+    if (n > EXACT_LIMIT) return { payments: settleGreedy(entries), exact: false };
+
+    var size = 1 << n;
+    var sums = new Float64Array(size), best = new Int8Array(size), from = new Int8Array(size);
+    for (var mask = 1; mask < size; mask++) {
+      var low = mask & -mask, i = 31 - Math.clz32(low);
+      sums[mask] = sums[mask ^ low] + entries[i].cents;
+      var top = -1, pick = -1;
+      for (var j = 0; j < n; j++) {
+        if (!(mask & (1 << j))) continue;
+        var v = best[mask ^ (1 << j)];
+        if (v > top) { top = v; pick = j; }
+      }
+      best[mask] = top + (sums[mask] === 0 ? 1 : 0);
+      from[mask] = pick;
+    }
+
+    // Walk back from everyone: each time the running set sums to zero, the
+    // people removed since the last zero form one self-contained group.
+    var groups = [], current = [];
+    mask = size - 1;
+    while (mask) {
+      if (sums[mask] === 0 && current.length) { groups.push(current); current = []; }
+      var p = from[mask];
+      current.push(entries[p]);
+      mask ^= 1 << p;
+    }
+    if (current.length) groups.push(current);
+
+    var payments = [];
+    groups.forEach(function (g) { payments = payments.concat(settleGreedy(g)); });
+    return { payments: payments, exact: true };
+  }
+
+  // How many payments people would make if everyone paid back each payer
+  // directly, after netting out pairs who owe each other.
+  function directPayments(expenses) {
+    var owe = {};
+    expenses.forEach(function (e, idx) {
+      var share = shareOf(e, idx);
+      Object.keys(share).forEach(function (id) {
+        if (id === e.paidBy || !share[id]) return;
+        var a = id < e.paidBy ? id : e.paidBy, b = id < e.paidBy ? e.paidBy : id;
+        var key = a + "\u0000" + b;
+        owe[key] = (owe[key] || 0) + (id === a ? share[id] : -share[id]);
+      });
+    });
+    return Object.keys(owe).filter(function (k) { return owe[k] !== 0; }).length;
+  }
+
   return {
     parseAmount: parseAmount,
+    settle: settle,
+    settleGreedy: settleGreedy,
+    directPayments: directPayments,
+    EXACT_LIMIT: EXACT_LIMIT,
     splitByWeights: splitByWeights,
     splitEven: splitEven,
     shareOf: shareOf,
