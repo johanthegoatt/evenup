@@ -194,8 +194,126 @@
     return Object.keys(owe).filter(function (k) { return owe[k] !== 0; }).length;
   }
 
+  function formatMoney(cents, currency, locale) {
+    try {
+      return new Intl.NumberFormat(locale || undefined, { style: "currency", currency: currency || "USD" }).format(cents / 100);
+    } catch (e) {
+      return (cents / 100).toFixed(2);
+    }
+  }
+
+  // A share link carries the whole split in the URL fragment, which browsers
+  // never send to a server. Everything read back is checked, because a link
+  // can come from anyone.
+  var LIMITS = { people: 30, expenses: 300, name: 40, what: 60, title: 60, amount: 1e11 };
+
+  function cleanText(s, max) {
+    return String(s == null ? "" : s).replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
+  }
+
+  function pack(state) {
+    var index = {};
+    state.people.forEach(function (p, i) { index[p.id] = i; });
+    var data = {
+      v: 1,
+      t: state.title || "",
+      c: state.currency || "USD",
+      p: state.people.map(function (p) { return p.name; }),
+      e: state.expenses.map(function (e) {
+        var s = e.split || { mode: "even" }, extra;
+        if (s.mode === "shares") extra = Object.keys(s.shares).map(function (id) { return [index[id], s.shares[id]]; });
+        else if (s.mode === "exact") extra = Object.keys(s.exact).map(function (id) { return [index[id], s.exact[id]]; });
+        else extra = (s.among || []).map(function (id) { return index[id]; });
+        return [e.what, e.amount, index[e.paidBy], s.mode === "shares" ? 1 : s.mode === "exact" ? 2 : 0, extra];
+      }),
+      d: Object.keys(state.paid || {}).filter(function (k) { return state.paid[k]; }).map(function (k) {
+        var bits = k.split(">");
+        return index[bits[0]] + ">" + index[bits[1]] + ">" + bits[2];
+      }).filter(function (k) { return !/undefined/.test(k); })
+    };
+    return toBase64Url(JSON.stringify(data));
+  }
+
+  function unpack(str) {
+    var data = JSON.parse(fromBase64Url(String(str)));
+    if (!data || data.v !== 1 || !Array.isArray(data.p) || !Array.isArray(data.e)) throw new Error("not an EvenUp link");
+    if (data.p.length > LIMITS.people || data.e.length > LIMITS.expenses) throw new Error("link is too big");
+    var people = data.p.map(function (name, i) { return { id: "p" + i, name: cleanText(name, LIMITS.name) || "Friend " + (i + 1) }; });
+    var who = function (i) {
+      if (!(Number.isInteger(i) && i >= 0 && i < people.length)) throw new Error("link names someone who is not in the group");
+      return people[i].id;
+    };
+    var money = function (c) {
+      if (!(Number.isSafeInteger(c) && c >= 0 && c <= LIMITS.amount)) throw new Error("bad amount in link");
+      return c;
+    };
+    var expenses = data.e.map(function (row, i) {
+      if (!Array.isArray(row) || row.length !== 5 || !Array.isArray(row[4])) throw new Error("bad cost in link");
+      var mode = row[3], split;
+      if (mode === 1) {
+        split = { mode: "shares", shares: {} };
+        row[4].forEach(function (pair) {
+          var w = Number(pair[1]);
+          if (!(w > 0 && w <= 100)) throw new Error("bad share in link");
+          split.shares[who(pair[0])] = w;
+        });
+      } else if (mode === 2) {
+        split = { mode: "exact", exact: {} };
+        row[4].forEach(function (pair) { split.exact[who(pair[0])] = money(pair[1]); });
+      } else if (mode === 0) {
+        split = { mode: "even", among: row[4].map(who) };
+      } else throw new Error("bad split in link");
+      var e = { id: "e" + i, what: cleanText(row[0], LIMITS.what) || "Cost " + (i + 1), amount: money(row[1]), paidBy: who(row[2]), split: split };
+      shareOf(e, i); // throws if the split cannot work
+      return e;
+    });
+    var paid = {};
+    (Array.isArray(data.d) ? data.d : []).slice(0, 200).forEach(function (k) {
+      var m = typeof k === "string" && /^(\d+)>(\d+)>(\d+)$/.exec(k);
+      if (m && +m[1] < people.length && +m[2] < people.length) paid["p" + m[1] + ">p" + m[2] + ">" + m[3]] = true;
+    });
+    var currency = /^[A-Z]{3}$/.test(data.c) ? data.c : "USD";
+    return { title: cleanText(data.t, LIMITS.title), currency: currency, people: people, expenses: expenses, paid: paid };
+  }
+
+  function toBase64Url(text) {
+    var bytes = new TextEncoder().encode(text), bin = "";
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function fromBase64Url(s) {
+    var bin = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  // A payment's key stays the same while the numbers stay the same, so a
+  // "paid" tick drops off by itself if a later cost changes who owes what.
+  function paymentKey(p) {
+    return p.from + ">" + p.to + ">" + p.amount;
+  }
+
+  // The message nobody likes writing. Short, friendly, with the numbers.
+  function reminder(name, owes, names, money, title) {
+    var lines = owes.map(function (p) { return "• " + money(p.amount) + " to " + names[p.to]; });
+    var where = title ? " for " + title : "";
+    if (lines.length === 1) {
+      return "Hi " + name + "! Settling up" + where + ": you owe " + money(owes[0].amount) + " to " + names[owes[0].to] + ". Thank you!";
+    }
+    return "Hi " + name + "! Settling up" + where + ", you owe:\n" + lines.join("\n") + "\nThank you!";
+  }
+
   return {
     parseAmount: parseAmount,
+    formatMoney: formatMoney,
+    pack: pack,
+    unpack: unpack,
+    paymentKey: paymentKey,
+    reminder: reminder,
+    LIMITS: LIMITS,
+    settle: settle,
     settle: settle,
     settleGreedy: settleGreedy,
     directPayments: directPayments,
