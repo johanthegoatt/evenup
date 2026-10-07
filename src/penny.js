@@ -214,6 +214,7 @@
     context = info || context;
     try { if (localStorage.getItem("evenup.pennyTucked")) dock.classList.add("tucked"); } catch (e) {}
     setTimeout(function () {
+      if (bubble.textContent) return; // you already did something; don't talk over it
       if (how === "link") say("You opened a shared split. Everything is here, on your phone now.");
       else if (how === "badlink") { flash("worried", 2000); say("That link looks broken, so I couldn't open it. Ask for a new one?"); }
       else if (how === "saved" && info.costs) say("Welcome back! I kept your split right where you left it.");
