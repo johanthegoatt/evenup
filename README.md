@@ -15,6 +15,7 @@ Split costs with friends and settle up in as few payments as possible. Add who p
 ## What you can do
 
 - Add people, then costs. Split each cost **equally** (tick who shared it), **by shares** (a couple is 2, a kid is 0.5) or by **exact amounts** (it tells you how much is left to assign).
+- Paid abroad? Tick **Paid in another currency**, type the rate from your card statement, and the cost is shared out in the trip's money. The other well-known app keeps currency conversion for paying users ([Android Central](https://androidcentral.com/apps-software/the-app-splitwise-is-the-best-hack-to-split-group-trip-expenses-in-2026)).
 - See **who pays who**, in the fewest payments, and how many payments that saves.
 - **Copy a message** for each person, or a summary for the group chat.
 - **Tick payments** as they come in. Penny throws coins when everyone is even.
@@ -38,6 +39,8 @@ best[mask] = max over i in mask of best[mask without i], plus 1 if mask sums to 
 ```
 
 then walks back through the table to recover the groups, and settles each one with biggest-debtor-pays-biggest-creditor. That is 2^16 x 16 steps at most, a few milliseconds. The usual biggest-pays-biggest method on its own is not always optimal: on balances of +5, +7, +4, +4, -5, -7, -8 it takes 6 payments, while the exact search finds 4 (it's a test). Past 16 people it falls back to one greedy pass, and the page says so.
+
+**Rates are exact decimals.** A rate like 1.0835 is kept as the typed string and converted with integer maths (BigInt), rounded half up, so EUR 50.00 at 1.0835 is always $54.18 and 1.005 never turns into 1.00499. Exact splits stay in the currency the cost was paid in and share out the converted total with the same largest remainder method.
 
 **Share links carry the data.** The split is packed as JSON, base64url, into the part of the link after `#`, which browsers never send to a server. A link can come from anyone, so everything read back is checked: people and cost limits, amounts must be whole non-negative cents, every person index must exist, exact splits must add up, names are trimmed and control characters dropped.
 

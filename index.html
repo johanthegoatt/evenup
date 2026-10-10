@@ -75,6 +75,24 @@
               </div>
             </div>
             <p class="error" id="amount-error" hidden></p>
+            <div class="fx">
+              <label class="fx-toggle"><input type="checkbox" id="fx-on"> <span>Paid in another currency</span></label>
+              <div class="fx-fields" id="fx-fields" hidden>
+                <div class="row-2 fx-row">
+                  <div class="field narrow">
+                    <label for="fx-code">Paid in</label>
+                    <select id="fx-code"></select>
+                  </div>
+                  <div class="field">
+                    <label for="fx-rate" id="fx-rate-label">Rate</label>
+                    <input id="fx-rate" type="text" inputmode="decimal" placeholder="1.08" autocomplete="off" aria-describedby="fx-error fx-out">
+                  </div>
+                </div>
+                <p class="fx-out" id="fx-out" aria-live="polite"></p>
+                <p class="hint">Use the rate from your bank or card statement. It already has any card fee in it, so everyone shares that too.</p>
+                <p class="error" id="fx-error" hidden></p>
+              </div>
+            </div>
             <div class="field">
               <label for="paid-by">Who paid?</label>
               <select id="paid-by"></select>

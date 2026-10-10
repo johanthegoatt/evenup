@@ -130,6 +130,12 @@ fieldset:disabled { opacity: 0.55; }
 .inline-form { display: flex; gap: var(--s3); align-items: end; flex-wrap: wrap; }
 .grow { flex: 1 1 180px; }
 .hint { font-size: 0.92rem; color: var(--ink-2); }
+.fx { display: grid; gap: var(--s3); }
+.fx-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; min-height: 36px; width: fit-content; }
+.fx-toggle input { width: 18px; height: 18px; }
+.fx-fields { display: grid; gap: 8px; padding: var(--s3); border: 1px dashed var(--line); border-radius: 12px; }
+.fx-fields .hint, .fx-out { margin: 0; }
+.fx-out { font-weight: 650; min-height: 1.4em; }
 .error { color: var(--red); font-weight: 600; font-size: 0.95rem; display: flex; gap: 6px; }
 .error::before { content: "!"; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--red); color: var(--surface); font-size: 0.8rem; flex: none; margin-top: 2px; }
 .empty { color: var(--ink-2); font-size: 0.97rem; }

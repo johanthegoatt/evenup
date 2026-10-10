@@ -194,6 +194,7 @@
       case "edited": say("Saved. I redid the maths."); break;
       case "deleted": flash("worried", 1200); say("Poof, " + d.what + " is gone. Changed your mind? Tap Undo."); break;
       case "undo": play("hop"); say("And it's back!"); break;
+      case "fx": say("Paid abroad? Type the rate from your card statement and I'll turn it into " + d.home + "."); break;
       case "mode":
         say(d.mode === "shares" ? "Shares are handy when someone had more. 2 means double." :
           d.mode === "exact" ? "Type what each person had. I'll tell you when it adds up." :

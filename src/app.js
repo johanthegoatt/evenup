@@ -55,6 +55,33 @@
   }
 
   var money = function (c) { return E.formatMoney(c, state.currency); };
+
+  // ---------- Paid in another currency ----------
+  function fx() {
+    var code = $("fx-code").value;
+    return { on: $("fx-on").checked && !!code && code !== state.currency, code: code, rate: E.parseRate($("fx-rate").value) };
+  }
+  // Amounts typed in the cost form are in the cost's own currency.
+  var formMoney = function (c) { var f = fx(); return E.formatMoney(c, f.on ? f.code : state.currency); };
+  // The typed amount in the trip currency, or NaN while the rate is missing.
+  function homeAmount(amount) {
+    var f = fx();
+    if (!f.on) return amount;
+    if (!f.rate || !(amount > 0)) return NaN;
+    return E.convert(amount, f.rate);
+  }
+  function fillFxCodes() {
+    var sel = $("fx-code"), was = sel.value;
+    sel.textContent = "";
+    CURRENCIES.filter(function (c) { return c !== state.currency; }).forEach(function (code) {
+      sel.appendChild(el("option", { value: code, text: code }));
+    });
+    sel.value = was && was !== state.currency ? was : (state.currency === "EUR" ? "USD" : "EUR");
+    fxLabel();
+  }
+  function fxLabel() {
+    $("fx-rate-label").textContent = "1 " + $("fx-code").value + " is how many " + state.currency + "?";
+  }
   var nameOf = function (id) {
     var p = state.people.find(function (x) { return x.id === id; });
     return p ? p.name : "?";
@@ -211,7 +238,7 @@
     }
     if (!Object.keys(exact).length) return { error: "Type an amount for at least one person." };
     if (amount >= 0 && sum !== amount) {
-      return { error: "These add up to " + money(sum) + ", but the cost is " + money(amount) + "." };
+      return { error: "These add up to " + formMoney(sum) + ", but the cost is " + formMoney(amount) + "." };
     }
     return { split: { mode: "exact", exact: exact } };
   }
@@ -219,7 +246,12 @@
   // Live "each pays" numbers and the exact-amount counter.
   function preview() {
     var amount = E.parseAmount($("amount").value);
-    var m = mode();
+    var m = mode(), f = fx();
+    var out = $("fx-out");
+    if (f.on) {
+      var h = homeAmount(amount);
+      out.textContent = h >= 0 ? formMoney(amount) + " = " + money(h) : amount > 0 ? "Type the rate to see it in " + state.currency + "." : "";
+    } else out.textContent = "";
     document.querySelectorAll("#split-rows [data-each]").forEach(function (n) { n.textContent = ""; });
     var left = $("exact-left");
     left.hidden = m !== "exact";
@@ -229,17 +261,18 @@
         var c = E.parseAmount(inp.value);
         if (c > 0) sum += c;
       });
-      if (!(amount > 0)) { left.textContent = "Typed so far: " + money(sum); left.className = "left"; return; }
+      if (!(amount > 0)) { left.textContent = "Typed so far: " + formMoney(sum); left.className = "left"; return; }
       var diff = amount - sum;
-      left.textContent = diff === 0 ? "Adds up. ✓" : diff > 0 ? money(diff) + " left to share out" : money(-diff) + " too much";
+      left.textContent = diff === 0 ? "Adds up. ✓" : diff > 0 ? formMoney(diff) + " left to share out" : formMoney(-diff) + " too much";
       left.className = "left " + (diff === 0 ? "ok" : "off");
       return;
     }
-    if (!(amount > 0)) return;
+    var home = homeAmount(amount);
+    if (!(home > 0)) return;
     var r = readSplit(amount);
     if (!r.split) return;
     try {
-      var owed = E.shareOf({ amount: amount, split: r.split }, state.expenses.length);
+      var owed = E.shareOf({ amount: home, split: r.split }, state.expenses.length);
       Object.keys(owed).forEach(function (id) {
         var n = document.querySelector('#split-rows [data-each="' + id + '"]');
         if (n) n.textContent = money(owed[id]);
@@ -251,6 +284,14 @@
     r.addEventListener("change", function () { renderSplitRows(false); showError("split-error", ""); P.react("mode", { mode: mode() }); });
   });
   $("amount").addEventListener("input", preview);
+  $("fx-on").addEventListener("change", function () {
+    $("fx-fields").hidden = !this.checked;
+    if (this.checked) { fillFxCodes(); P.react("fx", { home: state.currency }); $("fx-code").focus(); }
+    else showError("fx-error", "", $("fx-rate"));
+    preview();
+  });
+  $("fx-code").addEventListener("change", function () { fxLabel(); preview(); });
+  $("fx-rate").addEventListener("input", preview);
   $("split-rows").addEventListener("input", preview);
   $("split-rows").addEventListener("change", preview);
 
@@ -262,10 +303,20 @@
     if (!(amount > 0)) { showError("amount-error", "Type how much it cost, like 1250 or 12.50.", amountInput); bad = true; }
     else if (amount > E.LIMITS.amount) { showError("amount-error", "That's more than EvenUp can handle in one cost.", amountInput); bad = true; }
     else showError("amount-error", "", amountInput);
+    var f = fx(), home = amount, fxBad = false;
+    if (f.on && !bad) {
+      if (!f.rate) fxBad = "Type the rate, like 1.08. It's on your card statement.";
+      else {
+        home = E.convert(amount, f.rate);
+        if (!(home > 0) || home > E.LIMITS.amount) fxBad = "That rate doesn't look right. Check it on your statement.";
+      }
+    }
+    showError("fx-error", fxBad || "", $("fx-rate"));
     var r = readSplit(bad ? -1 : amount);
     showError("split-error", r.error || "");
+    if (fxBad) bad = true;
     if (bad || r.error) {
-      (bad ? amountInput : $("split-rows").querySelector("input") || amountInput).focus();
+      (fxBad && !(amount > 0) ? amountInput : fxBad ? $("fx-rate") : bad ? amountInput : $("split-rows").querySelector("input") || amountInput).focus();
       P.react("oops");
       return;
     }
@@ -274,7 +325,8 @@
       return;
     }
     var what = $("what").value.replace(/\s+/g, " ").trim().slice(0, E.LIMITS.what) || "Cost " + (state.expenses.length + 1);
-    var cost = { id: editing || uid("e"), what: what, amount: amount, paidBy: $("paid-by").value, split: r.split };
+    var cost = { id: editing || uid("e"), what: what, amount: home, paidBy: $("paid-by").value, split: r.split };
+    if (f.on) cost.fx = { code: f.code, amount: amount, rate: f.rate };
     if (editing) {
       var i = state.expenses.findIndex(function (e) { return e.id === editing; });
       state.expenses[i] = cost;
@@ -297,6 +349,11 @@
     $("cost-cancel").hidden = true;
     document.querySelector('input[name="mode"][value="even"]').checked = true;
     pendingTicks = {};
+    $("fx-on").checked = false;
+    $("fx-fields").hidden = true;
+    $("fx-rate").value = "";
+    $("fx-out").textContent = "";
+    showError("fx-error", "", $("fx-rate"));
     showError("amount-error", "", $("amount"));
     showError("split-error", "");
     renderSplitRows(false);
@@ -309,8 +366,18 @@
     if (!e) return;
     editing = id;
     $("what").value = e.what;
-    $("amount").value = (e.amount / 100).toFixed(2);
+    $("amount").value = ((e.fx ? e.fx.amount : e.amount) / 100).toFixed(2);
     $("paid-by").value = e.paidBy;
+    $("fx-on").checked = !!e.fx;
+    $("fx-fields").hidden = !e.fx;
+    if (e.fx) {
+      fillFxCodes();
+      var has = [].some.call($("fx-code").options, function (o) { return o.value === e.fx.code; });
+      if (!has) $("fx-code").appendChild(el("option", { value: e.fx.code, text: e.fx.code }));
+      $("fx-code").value = e.fx.code;
+      fxLabel();
+      $("fx-rate").value = e.fx.rate;
+    }
     document.querySelector('input[name="mode"][value="' + e.split.mode + '"]').checked = true;
     renderSplitRows(false);
     document.querySelectorAll("#split-rows [data-person]").forEach(function (inp) {
@@ -345,7 +412,7 @@
   // ---------- Title and currency ----------
 
   $("title").addEventListener("input", function () { state.title = this.value.slice(0, E.LIMITS.title); save(); });
-  $("currency").addEventListener("change", function () { state.currency = this.value; commit(); });
+  $("currency").addEventListener("change", function () { state.currency = this.value; if ($("fx-on").checked) fillFxCodes(); commit(); preview(); });
 
   // ---------- Results ----------
 
@@ -473,7 +540,7 @@
       costs.appendChild(el("li", { class: "cost" + (editing === e.id ? " editing" : "") }, [
         el("div", { class: "body" }, [
           el("div", { class: "what", text: e.what }),
-          el("div", { class: "meta", text: nameOf(e.paidBy) + " paid · " + splitLabel(e) })
+          el("div", { class: "meta", text: nameOf(e.paidBy) + " paid" + (e.fx ? " " + E.formatMoney(e.fx.amount, e.fx.code) + " at " + e.fx.rate : "") + " · " + splitLabel(e) })
         ]),
         el("span", { class: "amt", text: money(e.amount) }),
         el("button", { type: "button", class: "icon-btn", "data-edit": e.id, "aria-label": "Change " + e.what, text: "✎" }),
