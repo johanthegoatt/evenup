@@ -66,12 +66,19 @@
     var split = expense.split || { mode: "even" };
     var out = {};
     if (split.mode === "exact") {
-      var total = 0;
-      Object.keys(split.exact || {}).forEach(function (id) {
+      var total = 0, exIds = Object.keys(split.exact || {});
+      exIds.forEach(function (id) {
         out[id] = split.exact[id];
         total += split.exact[id];
       });
-      if (total !== expense.amount) throw new Error("exact amounts add up to " + total + ", not " + expense.amount);
+      // A cost paid in another currency keeps its exact amounts in that
+      // currency; they set each person's part of the converted total.
+      var want = expense.fx ? expense.fx.amount : expense.amount;
+      if (total !== want) throw new Error("exact amounts add up to " + total + ", not " + want);
+      if (expense.fx) {
+        var conv = splitByWeights(expense.amount, exIds.map(function (id) { return split.exact[id]; }), index || 0);
+        exIds.forEach(function (id, j) { out[id] = conv[j]; });
+      }
       return out;
     }
     var ids, weights;
@@ -194,6 +201,26 @@
     return Object.keys(owe).filter(function (k) { return owe[k] !== 0; }).length;
   }
 
+  // Exchange rates are read as exact decimals ("1.0835", "56,42") and kept
+  // as the typed string, so a share link round-trips the same number.
+  function parseRate(text) {
+    var s = String(text == null ? "" : text).trim().replace(",", ".");
+    if (!/^\d{1,7}(\.\d{1,8})?$/.test(s)) return null;
+    s = s.replace(/^0+(?=\d)/, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+    if (!/[1-9]/.test(s)) return null;
+    return s;
+  }
+
+  // Foreign cents times the rate, rounded half up, in exact integer maths.
+  function convert(cents, rate) {
+    var r = parseRate(rate);
+    if (r == null) throw new Error("bad rate");
+    var dot = r.indexOf("."), decimals = dot === -1 ? 0 : r.length - dot - 1;
+    var num = BigInt(r.replace(".", "")), den = BigInt(Math.pow(10, decimals));
+    var out = (BigInt(cents) * num * 2n + den) / (2n * den);
+    return Number(out);
+  }
+
   function formatMoney(cents, currency, locale) {
     try {
       return new Intl.NumberFormat(locale || undefined, { style: "currency", currency: currency || "USD" }).format(cents / 100);
@@ -224,7 +251,9 @@
         if (s.mode === "shares") extra = Object.keys(s.shares).map(function (id) { return [index[id], s.shares[id]]; });
         else if (s.mode === "exact") extra = Object.keys(s.exact).map(function (id) { return [index[id], s.exact[id]]; });
         else extra = (s.among || []).map(function (id) { return index[id]; });
-        return [e.what, e.amount, index[e.paidBy], s.mode === "shares" ? 1 : s.mode === "exact" ? 2 : 0, extra];
+        var row = [e.what, e.amount, index[e.paidBy], s.mode === "shares" ? 1 : s.mode === "exact" ? 2 : 0, extra];
+        if (e.fx) row.push([e.fx.code, e.fx.amount, e.fx.rate]);
+        return row;
       }),
       d: Object.keys(state.paid || {}).filter(function (k) { return state.paid[k]; }).map(function (k) {
         var bits = k.split(">");
@@ -248,7 +277,7 @@
       return c;
     };
     var expenses = data.e.map(function (row, i) {
-      if (!Array.isArray(row) || row.length !== 5 || !Array.isArray(row[4])) throw new Error("bad cost in link");
+      if (!Array.isArray(row) || (row.length !== 5 && row.length !== 6) || !Array.isArray(row[4])) throw new Error("bad cost in link");
       var mode = row[3], split;
       if (mode === 1) {
         split = { mode: "shares", shares: {} };
@@ -264,6 +293,12 @@
         split = { mode: "even", among: row[4].map(who) };
       } else throw new Error("bad split in link");
       var e = { id: "e" + i, what: cleanText(row[0], LIMITS.what) || "Cost " + (i + 1), amount: money(row[1]), paidBy: who(row[2]), split: split };
+      if (row.length === 6) {
+        var fx = row[5];
+        if (!Array.isArray(fx) || !/^[A-Z]{3}$/.test(fx[0]) || parseRate(fx[2]) == null) throw new Error("bad currency in link");
+        e.fx = { code: fx[0], amount: money(fx[1]), rate: parseRate(fx[2]) };
+        if (convert(e.fx.amount, e.fx.rate) !== e.amount) throw new Error("converted amount in link does not match");
+      }
       shareOf(e, i); // throws if the split cannot work
       return e;
     });
@@ -307,6 +342,8 @@
 
   return {
     parseAmount: parseAmount,
+    parseRate: parseRate,
+    convert: convert,
     formatMoney: formatMoney,
     pack: pack,
     unpack: unpack,
