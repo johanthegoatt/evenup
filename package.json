@@ -2,7 +2,7 @@
   "name": "evenup",
   "version": "0.1.0",
   "private": true,
-  "description": "Split group costs and settle up in the fewest payments. Runs in the browser, no account.",
+  "description": "Split group costs and settle up in the fewest payments.",
   "scripts": {
     "test": "node --test"
   },

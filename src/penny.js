@@ -18,8 +18,7 @@
   var TIPS = {
     sleepy: [
       "Hi, I'm Penny! Add the people first. Don't forget yourself.",
-      "Tap \"See an example\" to watch me split a beach trip.",
-      "No sign up. Everything stays on this phone."
+      "Tap \"See an example\" to watch me split a beach trip."
     ],
     curious: [
       "Now add a cost. What did someone pay for?",
