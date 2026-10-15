@@ -232,7 +232,7 @@
   // A share link carries the whole split in the URL fragment, which browsers
   // never send to a server. Everything read back is checked, because a link
   // can come from anyone.
-  var LIMITS = { people: 30, expenses: 300, name: 40, what: 60, title: 60, amount: 1e11 };
+  var LIMITS = { people: 30, expenses: 300, name: 40, what: 60, title: 60, pay: 80, amount: 1e11 };
 
   function cleanText(s, max) {
     return String(s == null ? "" : s).replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
@@ -246,6 +246,7 @@
       t: state.title || "",
       c: state.currency || "USD",
       p: state.people.map(function (p) { return p.name; }),
+      h: state.people.some(function (p) { return p.pay; }) ? state.people.map(function (p) { return p.pay || ""; }) : undefined,
       e: state.expenses.map(function (e) {
         var s = e.split || { mode: "even" }, extra;
         if (s.mode === "shares") extra = Object.keys(s.shares).map(function (id) { return [index[id], s.shares[id]]; });
@@ -267,7 +268,12 @@
     var data = JSON.parse(fromBase64Url(String(str)));
     if (!data || data.v !== 1 || !Array.isArray(data.p) || !Array.isArray(data.e)) throw new Error("not an EvenUp link");
     if (data.p.length > LIMITS.people || data.e.length > LIMITS.expenses) throw new Error("link is too big");
-    var people = data.p.map(function (name, i) { return { id: "p" + i, name: cleanText(name, LIMITS.name) || "Friend " + (i + 1) }; });
+    var people = data.p.map(function (name, i) {
+      var person = { id: "p" + i, name: cleanText(name, LIMITS.name) || "Friend " + (i + 1) };
+      var pay = Array.isArray(data.h) ? cleanText(data.h[i], LIMITS.pay) : "";
+      if (pay) person.pay = pay;
+      return person;
+    });
     var who = function (i) {
       if (!(Number.isInteger(i) && i >= 0 && i < people.length)) throw new Error("link names someone who is not in the group");
       return people[i].id;
@@ -330,12 +336,31 @@
     return p.from + ">" + p.to + ">" + p.amount;
   }
 
+  // How to pay someone, from what they typed as their handle. PayPal.me and
+  // Monzo.me take the amount in the path, so the link opens ready to send;
+  // anything else (a Venmo @name, an IBAN, revolut.me/x) is shown as written.
+  function payLink(handle, cents, currency) {
+    var h = cleanText(handle, LIMITS.pay);
+    if (!h) return "";
+    var m = h.match(/^(?:https?:\/\/)?(?:www\.)?(paypal\.me|monzo\.me)\/([A-Za-z0-9._-]+)\/?$/i);
+    if (!m || !(cents > 0)) return h;
+    var amount = (cents / 100).toFixed(2);
+    if (/^paypal/i.test(m[1])) return "https://paypal.me/" + m[2] + "/" + amount + (currency || "");
+    // Monzo.me only takes pounds.
+    return currency && currency !== "GBP" ? "https://monzo.me/" + m[2] : "https://monzo.me/" + m[2] + "/" + amount;
+  }
+
   // The message nobody likes writing. Short, friendly, with the numbers.
-  function reminder(name, owes, names, money, title) {
-    var lines = owes.map(function (p) { return "• " + money(p.amount) + " to " + names[p.to]; });
+  // `pays` maps person id to their payment handle, `currency` the ISO code.
+  function reminder(name, owes, names, money, title, pays, currency) {
+    var how = function (p) {
+      var link = payLink(pays && pays[p.to], p.amount, currency);
+      return link ? " (" + link + ")" : "";
+    };
+    var lines = owes.map(function (p) { return "• " + money(p.amount) + " to " + names[p.to] + how(p); });
     var where = title ? " for " + title : "";
     if (lines.length === 1) {
-      return "Hi " + name + "! Settling up" + where + ": you owe " + money(owes[0].amount) + " to " + names[owes[0].to] + ". Thank you!";
+      return "Hi " + name + "! Settling up" + where + ": you owe " + money(owes[0].amount) + " to " + names[owes[0].to] + how(owes[0]) + ". Thank you!";
     }
     return "Hi " + name + "! Settling up" + where + ", you owe:\n" + lines.join("\n") + "\nThank you!";
   }
@@ -349,6 +374,7 @@
     unpack: unpack,
     paymentKey: paymentKey,
     reminder: reminder,
+    payLink: payLink,
     LIMITS: LIMITS,
     settle: settle,
     settle: settle,

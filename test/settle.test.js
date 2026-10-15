@@ -97,3 +97,33 @@ test("direct paybacks: a dinner of 4 paid by 2 people", () => {
   assert.equal(E.directPayments(expenses), 5);
   assert.equal(E.settle(E.balances(all.map((id) => ({ id })), expenses)).payments.length, 3);
 });
+
+test("pay links fill in the amount where the service allows it", () => {
+  assert.equal(E.payLink("paypal.me/ana", 1250, "EUR"), "https://paypal.me/ana/12.50EUR");
+  assert.equal(E.payLink("https://www.PayPal.me/ana/", 999, "USD"), "https://paypal.me/ana/9.99USD");
+  assert.equal(E.payLink("monzo.me/ben", 400, "GBP"), "https://monzo.me/ben/4.00");
+  assert.equal(E.payLink("monzo.me/ben", 400, "EUR"), "https://monzo.me/ben");
+  assert.equal(E.payLink("@cris on Venmo", 400, "USD"), "@cris on Venmo");
+  assert.equal(E.payLink("", 400, "USD"), "");
+});
+
+test("reminders carry the payee's link", () => {
+  const money = (c) => "€" + (c / 100).toFixed(2);
+  const text = E.reminder("Ben", [{ from: "b", to: "a", amount: 1250 }], { a: "Ana", b: "Ben" }, money, "Lisbon", { a: "paypal.me/ana" }, "EUR");
+  assert.match(text, /€12\.50 to Ana \(https:\/\/paypal\.me\/ana\/12\.50EUR\)/);
+  const plain = E.reminder("Ben", [{ from: "b", to: "a", amount: 1250 }], { a: "Ana", b: "Ben" }, money, "");
+  assert.doesNotMatch(plain, /\(/);
+});
+
+test("pay handles survive a share link", () => {
+  const state = {
+    title: "Trip",
+    currency: "EUR",
+    people: [{ id: "x", name: "Ana", pay: "paypal.me/ana" }, { id: "y", name: "Ben" }],
+    expenses: [],
+    paid: {}
+  };
+  const back = E.unpack(E.pack(state));
+  assert.equal(back.people[0].pay, "paypal.me/ana");
+  assert.equal(back.people[1].pay, undefined);
+});

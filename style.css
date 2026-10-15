@@ -187,6 +187,9 @@ fieldset:disabled { opacity: 0.55; }
 .icon-btn.del:hover { color: var(--red); background: var(--red-soft); }
 
 /* People chips */
+.pay-box { margin-top: var(--s3); }
+.pay-box summary { cursor: pointer; font-weight: 650; min-height: 32px; }
+.pay-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s3); margin-top: var(--s2); }
 .chips { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s2); }
 .chip { display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 6px; border-radius: 999px; background: var(--green-soft); font-weight: 650; max-width: 100%; }
 .chip .face { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--brass); color: #17302a; font-size: 0.85rem; font-weight: 800; flex: none; }

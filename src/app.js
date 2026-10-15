@@ -91,6 +91,11 @@
     state.people.forEach(function (p) { m[p.id] = p.name; });
     return m;
   };
+  var paysMap = function () {
+    var m = {};
+    state.people.forEach(function (p) { if (p.pay) m[p.id] = p.pay; });
+    return m;
+  };
   var initials = function (name) {
     var parts = name.trim().split(/\s+/);
     var s = Array.from(parts[0] || "?")[0] + (parts[1] ? Array.from(parts[1])[0] : "");
@@ -154,6 +159,33 @@
     var gone = state.people.splice(idx, 1)[0];
     commit();
     toast(gone.name + " removed.", function () { state.people.splice(idx, 0, gone); commit(); });
+  });
+
+  // Rebuilt only when the people change, so typing in a field keeps focus.
+  var payRowsFor = "";
+  function renderPayRows() {
+    $("pay-box").hidden = state.people.length === 0;
+    var key = state.people.map(function (p) { return p.id + ":" + p.name; }).join("|");
+    if (key === payRowsFor) return;
+    payRowsFor = key;
+    var box = $("pay-rows");
+    box.textContent = "";
+    state.people.forEach(function (p) {
+      var id = "pay-" + p.id;
+      var input = el("input", { id: id, type: "text", maxlength: String(E.LIMITS.pay), placeholder: "paypal.me/" + p.name.toLowerCase().replace(/[^a-z0-9]/g, ""), autocomplete: "off" });
+      input.value = p.pay || "";
+      input.setAttribute("data-pay-for", p.id);
+      box.appendChild(el("div", { class: "field" }, [el("label", { for: id, text: p.name }), input]));
+    });
+  }
+
+  $("pay-rows").addEventListener("change", function (ev) {
+    var id = ev.target.getAttribute("data-pay-for");
+    var p = state.people.find(function (x) { return x.id === id; });
+    if (!p) return;
+    var value = ev.target.value.trim();
+    if (value) p.pay = value; else delete p.pay;
+    commit();
   });
 
   // ---------- Cost form ----------
@@ -434,13 +466,15 @@
     var who = btn.getAttribute("data-copy");
     var owes = lastResult.payments.filter(function (p) { return p.from === who && !state.paid[E.paymentKey(p)]; });
     if (!owes.length) owes = lastResult.payments.filter(function (p) { return p.from === who; });
-    copy(E.reminder(nameOf(who), owes, namesMap(), money, state.title), "Message for " + nameOf(who) + " copied.");
+    copy(E.reminder(nameOf(who), owes, namesMap(), money, state.title, paysMap(), state.currency), "Message for " + nameOf(who) + " copied.");
   });
 
   $("copy-all").addEventListener("click", function () {
     var lines = [(state.title || "Our split") + ", settled with EvenUp:"];
     lastResult.payments.forEach(function (p) {
-      lines.push((state.paid[E.paymentKey(p)] ? "✓ " : "• ") + nameOf(p.from) + " pays " + nameOf(p.to) + " " + money(p.amount));
+      var paid = state.paid[E.paymentKey(p)];
+      var link = paid ? "" : E.payLink(paysMap()[p.to], p.amount, state.currency);
+      lines.push((paid ? "✓ " : "• ") + nameOf(p.from) + " pays " + nameOf(p.to) + " " + money(p.amount) + (link ? " (" + link + ")" : ""));
     });
     copy(lines.join("\n"), "Copied. Paste it in your group chat.");
   });
@@ -519,6 +553,7 @@
       ]));
     });
     $("people-empty").hidden = state.people.length > 0;
+    renderPayRows();
 
     // Cost form
     var ready = state.people.length >= 2;
