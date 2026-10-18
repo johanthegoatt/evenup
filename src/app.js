@@ -324,6 +324,44 @@
   });
   $("fx-code").addEventListener("change", function () { fxLabel(); preview(); });
   $("fx-rate").addEventListener("input", preview);
+
+  // ---------- Tip / service charge ----------
+  // The amount the bill was in home money, for working out a tip from a %.
+  function homeAmount() {
+    var amount = E.parseAmount($("amount").value);
+    if (!(amount > 0)) return 0;
+    var f = fx();
+    if (f.on && f.rate) { var h = E.convert(amount, f.rate); return h > 0 ? h : 0; }
+    return amount;
+  }
+  function tipCents() {
+    if (!$("tip-on").checked) return 0;
+    return E.tipFromPercent(homeAmount(), $("tip-pct").value);
+  }
+  function tipPreview() {
+    var out = $("tip-out");
+    if (!$("tip-on").checked) { out.textContent = ""; return; }
+    var pct = parseFloat(String($("tip-pct").value).replace(",", "."));
+    var home = homeAmount();
+    if (!(pct > 0)) { out.textContent = "Pick or type a tip."; return; }
+    if (!(home > 0)) { out.textContent = "Type the amount first."; return; }
+    out.textContent = "Adds " + money(E.tipFromPercent(home, pct)) + " on top, shared out.";
+    [].forEach.call($("tip-chips").children, function (b) {
+      b.classList.toggle("on", b.getAttribute("data-pct") === String(pct));
+    });
+  }
+  $("tip-on").addEventListener("change", function () {
+    $("tip-fields").hidden = !this.checked;
+    if (this.checked) { if (!$("tip-pct").value) $("tip-pct").value = "15"; $("tip-pct").focus(); }
+    tipPreview();
+  });
+  $("tip-chips").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-pct]"); if (!b) return;
+    $("tip-pct").value = b.getAttribute("data-pct");
+    tipPreview();
+  });
+  $("tip-pct").addEventListener("input", tipPreview);
+  $("amount").addEventListener("input", tipPreview);
   $("split-rows").addEventListener("input", preview);
   $("split-rows").addEventListener("change", preview);
 
@@ -359,6 +397,8 @@
     var what = $("what").value.replace(/\s+/g, " ").trim().slice(0, E.LIMITS.what) || "Cost " + (state.expenses.length + 1);
     var cost = { id: editing || uid("e"), what: what, amount: home, paidBy: $("paid-by").value, split: r.split };
     if (f.on) cost.fx = { code: f.code, amount: amount, rate: f.rate };
+    var tip = tipCents();
+    if (tip > 0) cost.tip = tip;
     if (editing) {
       var i = state.expenses.findIndex(function (e) { return e.id === editing; });
       state.expenses[i] = cost;
@@ -385,6 +425,10 @@
     $("fx-fields").hidden = true;
     $("fx-rate").value = "";
     $("fx-out").textContent = "";
+    $("tip-on").checked = false;
+    $("tip-fields").hidden = true;
+    $("tip-pct").value = "";
+    $("tip-out").textContent = "";
     showError("fx-error", "", $("fx-rate"));
     showError("amount-error", "", $("amount"));
     showError("split-error", "");
@@ -410,6 +454,17 @@
       fxLabel();
       $("fx-rate").value = e.fx.rate;
     }
+    var tip = E.tipOf(e);
+    $("tip-on").checked = tip > 0;
+    $("tip-fields").hidden = tip <= 0;
+    if (tip > 0) {
+      // Show the % that gives this tip, trimmed so 15.0 reads as 15.
+      var pct = Math.round((tip / e.amount) * 1000) / 10;
+      $("tip-pct").value = String(pct);
+    } else {
+      $("tip-pct").value = "";
+    }
+    $("tip-out").textContent = "";
     document.querySelector('input[name="mode"][value="' + e.split.mode + '"]').checked = true;
     renderSplitRows(false);
     document.querySelectorAll("#split-rows [data-person]").forEach(function (inp) {
@@ -571,13 +626,14 @@
     costs.textContent = "";
     var total = 0;
     state.expenses.forEach(function (e) {
-      total += e.amount;
+      total += E.grossAmount(e);
+      var tip = E.tipOf(e);
       costs.appendChild(el("li", { class: "cost" + (editing === e.id ? " editing" : "") }, [
         el("div", { class: "body" }, [
           el("div", { class: "what", text: e.what }),
-          el("div", { class: "meta", text: nameOf(e.paidBy) + " paid" + (e.fx ? " " + E.formatMoney(e.fx.amount, e.fx.code) + " at " + e.fx.rate : "") + " · " + splitLabel(e) })
+          el("div", { class: "meta", text: nameOf(e.paidBy) + " paid" + (e.fx ? " " + E.formatMoney(e.fx.amount, e.fx.code) + " at " + e.fx.rate : "") + (tip ? " · incl. " + money(tip) + " tip" : "") + " · " + splitLabel(e) })
         ]),
-        el("span", { class: "amt", text: money(e.amount) }),
+        el("span", { class: "amt", text: money(E.grossAmount(e)) }),
         el("button", { type: "button", class: "icon-btn", "data-edit": e.id, "aria-label": "Change " + e.what, text: "✎" }),
         el("button", { type: "button", class: "icon-btn del", "data-delete": e.id, "aria-label": "Remove " + e.what, text: "×" })
       ]));
