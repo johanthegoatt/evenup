@@ -344,3 +344,14 @@ details p { margin-top: var(--s2); color: var(--ink-2); max-width: 62ch; }
   body { background: #fff; color: #000; padding: 0; }
   .card { box-shadow: none; border: 1px solid #999; }
 }
+
+/* Tip / service charge */
+.tip-fields { display: grid; gap: 8px; padding: var(--s3); border: 1px dashed var(--line); border-radius: 12px; }
+.tip-fields .hint, .tip-fields .fx-out { margin: 0; }
+.tip-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tip-chips button {
+  border: 1px solid var(--line); background: var(--surface); color: inherit;
+  border-radius: 999px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; min-height: 36px;
+}
+.tip-chips button:hover { border-color: var(--green); }
+.tip-chips button.on { background: var(--green); border-color: var(--green); color: var(--green-ink); }

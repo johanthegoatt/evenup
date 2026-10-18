@@ -98,6 +98,24 @@
                 <p class="error" id="fx-error" hidden></p>
               </div>
             </div>
+            <div class="tip">
+              <label class="fx-toggle"><input type="checkbox" id="tip-on"> <span>Add a tip or service charge</span></label>
+              <div class="tip-fields" id="tip-fields" hidden>
+                <div class="tip-chips" id="tip-chips" role="group" aria-label="Tip amount">
+                  <button type="button" data-pct="10">10%</button>
+                  <button type="button" data-pct="12.5">12.5%</button>
+                  <button type="button" data-pct="15">15%</button>
+                  <button type="button" data-pct="18">18%</button>
+                  <button type="button" data-pct="20">20%</button>
+                </div>
+                <div class="field narrow">
+                  <label for="tip-pct">Or type a %</label>
+                  <input id="tip-pct" type="text" inputmode="decimal" placeholder="15" autocomplete="off" aria-describedby="tip-out">
+                </div>
+                <p class="fx-out" id="tip-out" aria-live="polite"></p>
+                <p class="hint">Shared the same way as the bill, so whoever ate more pays a bit more of it.</p>
+              </div>
+            </div>
             <div class="field">
               <label for="paid-by">Who paid?</label>
               <select id="paid-by"></select>
