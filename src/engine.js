@@ -58,10 +58,40 @@
     return splitByWeights(total, w, offset);
   }
 
+  // A tip or service charge on a cost, held as whole cents on top of the
+  // amount. It is shared in the same proportion as the cost itself, which is
+  // the fair way: someone whose main is twice as dear pays twice the service.
+  function tipOf(expense) {
+    var t = expense && expense.tip;
+    return Number.isSafeInteger(t) && t > 0 ? t : 0;
+  }
+
+  // Amount plus tip: what the payer actually handed over.
+  function grossAmount(expense) {
+    return expense.amount + tipOf(expense);
+  }
+
+  // Spread the tip across the people who already share a cost, weighted by how
+  // much each one owes, so the parts still add back up to the exact tip.
+  function addTip(out, expense, index) {
+    var tip = tipOf(expense);
+    if (!tip) return out;
+    var ids = Object.keys(out);
+    if (!ids.length) return out;
+    var weights = ids.map(function (id) { return Math.abs(out[id]); });
+    if (weights.reduce(function (a, b) { return a + b; }, 0) <= 0) {
+      weights = ids.map(function () { return 1; });
+    }
+    var parts = splitByWeights(tip, weights, index || 0);
+    ids.forEach(function (id, j) { out[id] += parts[j]; });
+    return out;
+  }
+
   // What each person owes for one expense, as { personId: cents }.
   //   split.mode "even":   among = [ids]
   //   split.mode "shares": shares = { id: number }   (e.g. 2 for a couple)
   //   split.mode "exact":  exact = { id: cents }     (must add up to the amount)
+  // Any tip on the cost is added on top, in the same proportions.
   function shareOf(expense, index) {
     var split = expense.split || { mode: "even" };
     var out = {};
@@ -79,7 +109,7 @@
         var conv = splitByWeights(expense.amount, exIds.map(function (id) { return split.exact[id]; }), index || 0);
         exIds.forEach(function (id, j) { out[id] = conv[j]; });
       }
-      return out;
+      return addTip(out, expense, index);
     }
     var ids, weights;
     if (split.mode === "shares") {
@@ -91,7 +121,7 @@
     }
     var parts = splitByWeights(expense.amount, weights, index || 0);
     ids.forEach(function (id, j) { out[id] = parts[j]; });
-    return out;
+    return addTip(out, expense, index);
   }
 
   // Net position per person: positive means the group owes them money back.
@@ -100,7 +130,7 @@
     people.forEach(function (p) { bal[p.id] = 0; });
     expenses.forEach(function (e, idx) {
       if (!(e.paidBy in bal)) throw new Error("unknown payer " + e.paidBy);
-      bal[e.paidBy] += e.amount;
+      bal[e.paidBy] += grossAmount(e);
       var owed = shareOf(e, idx);
       Object.keys(owed).forEach(function (id) {
         if (!(id in bal)) throw new Error("unknown person " + id);
@@ -254,6 +284,7 @@
         else extra = (s.among || []).map(function (id) { return index[id]; });
         var row = [e.what, e.amount, index[e.paidBy], s.mode === "shares" ? 1 : s.mode === "exact" ? 2 : 0, extra];
         if (e.fx) row.push([e.fx.code, e.fx.amount, e.fx.rate]);
+        if (tipOf(e)) row.push(e.tip); // a trailing number is the tip; fx is an array
         return row;
       }),
       d: Object.keys(state.paid || {}).filter(function (k) { return state.paid[k]; }).map(function (k) {
@@ -283,7 +314,7 @@
       return c;
     };
     var expenses = data.e.map(function (row, i) {
-      if (!Array.isArray(row) || (row.length !== 5 && row.length !== 6) || !Array.isArray(row[4])) throw new Error("bad cost in link");
+      if (!Array.isArray(row) || row.length < 5 || row.length > 7 || !Array.isArray(row[4])) throw new Error("bad cost in link");
       var mode = row[3], split;
       if (mode === 1) {
         split = { mode: "shares", shares: {} };
@@ -299,11 +330,17 @@
         split = { mode: "even", among: row[4].map(who) };
       } else throw new Error("bad split in link");
       var e = { id: "e" + i, what: cleanText(row[0], LIMITS.what) || "Cost " + (i + 1), amount: money(row[1]), paidBy: who(row[2]), split: split };
-      if (row.length === 6) {
-        var fx = row[5];
-        if (!Array.isArray(fx) || !/^[A-Z]{3}$/.test(fx[0]) || parseRate(fx[2]) == null) throw new Error("bad currency in link");
-        e.fx = { code: fx[0], amount: money(fx[1]), rate: parseRate(fx[2]) };
-        if (convert(e.fx.amount, e.fx.rate) !== e.amount) throw new Error("converted amount in link does not match");
+      // Trailing slots after the split: an array is the foreign-currency info,
+      // a number is the tip. Either, both or neither may be there.
+      for (var t = 5; t < row.length; t++) {
+        if (Array.isArray(row[t])) {
+          var fx = row[t];
+          if (!/^[A-Z]{3}$/.test(fx[0]) || parseRate(fx[2]) == null) throw new Error("bad currency in link");
+          e.fx = { code: fx[0], amount: money(fx[1]), rate: parseRate(fx[2]) };
+          if (convert(e.fx.amount, e.fx.rate) !== e.amount) throw new Error("converted amount in link does not match");
+        } else if (typeof row[t] === "number") {
+          e.tip = money(row[t]);
+        } else throw new Error("bad cost in link");
       }
       shareOf(e, i); // throws if the split cannot work
       return e;
@@ -365,10 +402,21 @@
     return "Hi " + name + "! Settling up" + where + ", you owe:\n" + lines.join("\n") + "\nThank you!";
   }
 
+  // Tip in whole cents for a percent of an amount, rounded half up. Handles
+  // "12.5" as readily as "15", and never goes below zero.
+  function tipFromPercent(amount, percent) {
+    var p = typeof percent === "number" ? percent : parseFloat(String(percent).replace(",", "."));
+    if (!(p > 0) || !(amount > 0)) return 0;
+    return Math.round((amount * p) / 100);
+  }
+
   return {
     parseAmount: parseAmount,
     parseRate: parseRate,
     convert: convert,
+    tipOf: tipOf,
+    grossAmount: grossAmount,
+    tipFromPercent: tipFromPercent,
     formatMoney: formatMoney,
     pack: pack,
     unpack: unpack,
