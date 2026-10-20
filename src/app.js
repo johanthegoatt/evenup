@@ -199,8 +199,61 @@
   var HINTS = {
     even: "Tick who shared it. Everyone pays the same.",
     shares: "Give a bigger number to someone who had more. A couple can be 2, a kid can be 0.5.",
-    exact: "Type what each person had. It needs to add up to the total."
+    exact: "Type what each person had. It needs to add up to the total.",
+    items: "Add each thing on the bill, its price, and who had it. The total fills in for you."
   };
+
+  // Rows for the "by items" split: each is a price and who had it.
+  var itemRows = [];
+  function seedItems() { if (!itemRows.length) itemRows = [{ amt: "", who: {} }]; }
+
+  function renderItems(wrap) {
+    seedItems();
+    itemRows.forEach(function (it, idx) {
+      var row = el("div", { class: "item-row" });
+      var top = el("div", { class: "item-top" });
+      var a = el("input", { type: "text", inputmode: "decimal", placeholder: "0.00", "data-item-amt": idx, "aria-label": "Price of item " + (idx + 1) });
+      a.value = it.amt;
+      top.appendChild(a);
+      var del = el("button", { type: "button", class: "item-del", "aria-label": "Remove item " + (idx + 1), text: "×" });
+      del.addEventListener("click", function () { itemRows.splice(idx, 1); renderSplitRows(true); });
+      top.appendChild(del);
+      row.appendChild(top);
+      var whoWrap = el("div", { class: "item-who" });
+      state.people.forEach(function (p) {
+        var box = el("input", { type: "checkbox", "data-item-who": idx, "data-who-id": p.id });
+        box.checked = !!it.who[p.id];
+        whoWrap.appendChild(el("label", { class: "chip" }, [box, el("span", { text: p.name })]));
+      });
+      row.appendChild(whoWrap);
+      wrap.appendChild(row);
+    });
+    var add = el("button", { type: "button", class: "ghost small add-item", text: "Add an item" });
+    add.addEventListener("click", function () { itemRows.push({ amt: "", who: {} }); renderSplitRows(true); });
+    wrap.appendChild(add);
+  }
+
+  function readItemsInto() {
+    document.querySelectorAll("#split-rows [data-item-amt]").forEach(function (inp) {
+      var i = +inp.getAttribute("data-item-amt");
+      if (itemRows[i]) itemRows[i].amt = inp.value;
+    });
+    document.querySelectorAll("#split-rows [data-item-who]").forEach(function (box) {
+      var i = +box.getAttribute("data-item-who"), id = box.getAttribute("data-who-id");
+      if (itemRows[i]) itemRows[i].who[id] = box.checked;
+    });
+  }
+
+  // Turn the item rows into { exact, total } in whole cents.
+  function itemsSplit() {
+    readItemsInto();
+    var items = itemRows.map(function (it) {
+      var c = E.parseAmount(it.amt);
+      var who = Object.keys(it.who).filter(function (id) { return it.who[id]; });
+      return { amount: c >= 0 ? c : 0, who: who };
+    });
+    return E.splitByItems(items, state.expenses.length);
+  }
 
   function renderSplitRows(keep) {
     var wrap = $("split-rows");
@@ -208,6 +261,8 @@
     wrap.textContent = "";
     var m = mode();
     $("mode-hint").textContent = HINTS[m];
+    $("amount").readOnly = (m === "items");
+    if (m === "items") { renderItems(wrap); preview(); return; }
     state.people.forEach(function (p) {
       var row = el("div", { class: "split-row" });
       if (m === "even") {
@@ -243,7 +298,13 @@
 
   // Build the split from the form. Returns { split } or { error }.
   function readSplit(amount) {
-    var m = mode(), rows = readRows();
+    var m = mode();
+    if (m === "items") {
+      var r = itemsSplit();
+      if (!r.total || !Object.keys(r.exact).length) return { error: "Add at least one item with a price and who had it." };
+      return { split: { mode: "exact", exact: r.exact } };
+    }
+    var rows = readRows();
     var ids = Object.keys(rows);
     if (m === "even") {
       var among = ids.filter(function (id) { return rows[id]; });
@@ -286,6 +347,17 @@
     } else out.textContent = "";
     document.querySelectorAll("#split-rows [data-each]").forEach(function (n) { n.textContent = ""; });
     var left = $("exact-left");
+    if (m === "items") {
+      var r = itemsSplit();
+      $("amount").value = r.total ? (r.total / 100).toFixed(2) : "";
+      left.hidden = false;
+      if (!r.total) { left.textContent = "Add items and tick who had each."; left.className = "left"; return; }
+      var who = Object.keys(r.exact).map(function (id) { return nameOf(id) + " " + formMoney(r.exact[id]); });
+      left.textContent = "Bill so far " + formMoney(r.total) + " — " + who.join(", ");
+      left.className = "left ok";
+      if (f.on) { var h2 = homeAmount(r.total); out.textContent = h2 >= 0 ? formMoney(r.total) + " = " + money(h2) : "Type the rate to see it in " + state.currency + "."; }
+      return;
+    }
     left.hidden = m !== "exact";
     if (m === "exact") {
       var sum = 0;
@@ -421,6 +493,8 @@
     $("cost-cancel").hidden = true;
     document.querySelector('input[name="mode"][value="even"]').checked = true;
     pendingTicks = {};
+    itemRows = [];
+    $("amount").readOnly = false;
     $("fx-on").checked = false;
     $("fx-fields").hidden = true;
     $("fx-rate").value = "";

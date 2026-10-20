@@ -156,6 +156,15 @@ fieldset:disabled { opacity: 0.55; }
 .split-row input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--green); flex: none; }
 .split-row input[type="text"], .split-row input[type="number"] { width: 110px; min-height: 38px; padding: 6px 10px; background: var(--surface); }
 .split-row .each { color: var(--ink-2); font-size: 0.92rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.item-row { padding: 10px; border-radius: 12px; background: var(--surface-2); display: grid; gap: 8px; }
+.item-top { display: flex; align-items: center; gap: var(--s3); }
+.item-top input[type="text"] { flex: 1; min-height: 38px; padding: 6px 10px; background: var(--surface); }
+.item-del { flex: none; width: 36px; height: 36px; border-radius: 10px; background: transparent; border: 1px solid var(--line, rgba(0,0,0,.15)); color: var(--ink-2); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.item-del:hover { color: var(--green); }
+.item-who { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.item-who .chip { cursor: pointer; }
+.item-who .chip input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--green); }
+.add-item { justify-self: start; }
 .left { font-weight: 650; font-size: 0.95rem; }
 .left.ok { color: var(--green); }
 .left.off { color: var(--red); }
