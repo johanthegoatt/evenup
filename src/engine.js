@@ -124,6 +124,28 @@
     return addTip(out, expense, index);
   }
 
+  // Split one bill by the items each person actually had. The restaurant case:
+  // you had the steak, I had the salad, we shared the wine. Each item is an
+  // amount and a list of who had it, and the item is split equally between
+  // them (largest remainder, so an odd cent on a shared item doesn't vanish).
+  // Returns { exact: { id: cents }, total } summing to the sum of the items.
+  // Feed `exact` into an "exact" split and any tip or service charge is shared
+  // on top in the same proportions, so the person with the steak carries more
+  // of it. This is the fair way to split a shared bill and the thing people
+  // get wrong by hand, usually by splitting the whole thing evenly.
+  function splitByItems(items, offset) {
+    var exact = {}, total = 0;
+    (items || []).forEach(function (it, idx) {
+      var amt = it && it.amount | 0;
+      var who = (it && it.who || []).filter(function (id) { return id != null; });
+      if (amt <= 0 || !who.length) return;
+      var parts = splitByWeights(amt, who.map(function () { return 1; }), (offset || 0) + idx);
+      who.forEach(function (id, j) { exact[id] = (exact[id] || 0) + parts[j]; });
+      total += amt;
+    });
+    return { exact: exact, total: total };
+  }
+
   // Net position per person: positive means the group owes them money back.
   function balances(people, expenses) {
     var bal = {};
@@ -432,6 +454,7 @@
     splitByWeights: splitByWeights,
     splitEven: splitEven,
     shareOf: shareOf,
+    splitByItems: splitByItems,
     balances: balances
   };
 });
