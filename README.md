@@ -16,7 +16,8 @@ Split costs with friends and settle up in as few payments as possible. Add who p
 
 - Add people, then costs. Split each cost **equally** (tick who shared it), **by shares** (a couple is 2, a kid is 0.5) or by **exact amounts** (it tells you how much is left to assign).
 - Paid abroad? Tick **Paid in another currency**, type the rate from your card statement, and the cost is shared out in the trip's money. The other well-known app keeps currency conversion for paying users ([Android Central](https://androidcentral.com/apps-software/the-app-splitwise-is-the-best-hack-to-split-group-trip-expenses-in-2026)).
-- Add a **tip or service charge** to a cost. Pick 10 to 20% or type your own, and it's shared the same way as the bill, so whoever had more pays a little more of it.
+- Split a bill **by items**. One meal out, everyone had something different: add each thing, its price, and tick who had it. Shared items (the wine, the sides) split between whoever had them, and the person who had the steak carries more of it. The total fills in for you. This is the fair way to split a shared bill and the thing people get wrong by eyeballing an even split.
+- Add a **tip or service charge** to a cost. Pick 10 to 20% or type your own, and it's shared the same way as the bill, so whoever had more pays a little more of it. On an itemised bill the tip rides on top in the same proportions.
 - See **who pays who**, in the fewest payments, and how many payments that saves.
 - **Copy a message** for each person, or a summary for the group chat. Add how each person gets paid and the message carries it: a paypal.me or monzo.me link opens with the exact amount filled in, anything else (a Venmo @name, a bank account) is shown as written.
 - **Tick payments** as they come in. Penny throws coins when everyone is even.
