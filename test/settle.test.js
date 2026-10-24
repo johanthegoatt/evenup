@@ -107,6 +107,20 @@ test("pay links fill in the amount where the service allows it", () => {
   assert.equal(E.payLink("", 400, "USD"), "");
 });
 
+test("Cash App links carry a dollar amount but not another currency", () => {
+  assert.equal(E.payLink("$Dana", 1500, "USD"), "https://cash.app/$Dana/15.00");
+  assert.equal(E.payLink("cash.app/$Dana", 1500, "USD"), "https://cash.app/$Dana/15.00");
+  // A euro split would send the wrong number, so drop to the plain profile.
+  assert.equal(E.payLink("$Dana", 1500, "EUR"), "https://cash.app/$Dana");
+});
+
+test("Venmo links pay the amount and carry the trip as the note", () => {
+  assert.equal(E.payLink("@evan", 725, "USD"), "https://venmo.com/evan?txn=pay&amount=7.25");
+  assert.equal(E.payLink("venmo.com/u/evan", 725, "USD", "Lisbon trip"),
+    "https://venmo.com/evan?txn=pay&amount=7.25&note=Lisbon%20trip");
+  assert.equal(E.payLink("@evan", 725, "GBP"), "https://venmo.com/evan?txn=pay");
+});
+
 test("reminders carry the payee's link", () => {
   const money = (c) => "€" + (c / 100).toFixed(2);
   const text = E.reminder("Ben", [{ from: "b", to: "a", amount: 1250 }], { a: "Ana", b: "Ben" }, money, "Lisbon", { a: "paypal.me/ana" }, "EUR");
