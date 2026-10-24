@@ -395,25 +395,45 @@
     return p.from + ">" + p.to + ">" + p.amount;
   }
 
-  // How to pay someone, from what they typed as their handle. PayPal.me and
-  // Monzo.me take the amount in the path, so the link opens ready to send;
-  // anything else (a Venmo @name, an IBAN, revolut.me/x) is shown as written.
-  function payLink(handle, cents, currency) {
+  // How to pay someone, from what they typed as their handle. PayPal.me,
+  // Monzo.me, Cash App and Venmo can all carry the amount, so the link opens
+  // ready to send; anything else (an IBAN, revolut.me/x) is shown as written.
+  // A link only prefills an amount in the currency that service settles in
+  // (Monzo pounds, Cash App and Venmo US dollars), so a euro split falls back
+  // to the plain profile link rather than sending the wrong number.
+  function payLink(handle, cents, currency, note) {
     var h = cleanText(handle, LIMITS.pay);
     if (!h) return "";
-    var m = h.match(/^(?:https?:\/\/)?(?:www\.)?(paypal\.me|monzo\.me)\/([A-Za-z0-9._-]+)\/?$/i);
-    if (!m || !(cents > 0)) return h;
-    var amount = (cents / 100).toFixed(2);
-    if (/^paypal/i.test(m[1])) return "https://paypal.me/" + m[2] + "/" + amount + (currency || "");
-    // Monzo.me only takes pounds.
-    return currency && currency !== "GBP" ? "https://monzo.me/" + m[2] : "https://monzo.me/" + m[2] + "/" + amount;
+    var amount = cents > 0 ? (cents / 100).toFixed(2) : "";
+    var m;
+    // PayPal.me / Monzo.me: amount in the path.
+    if ((m = h.match(/^(?:https?:\/\/)?(?:www\.)?(paypal\.me|monzo\.me)\/([A-Za-z0-9._-]+)\/?$/i))) {
+      if (!amount) return h;
+      if (/^paypal/i.test(m[1])) return "https://paypal.me/" + m[2] + "/" + amount + (currency || "");
+      return currency && currency !== "GBP" ? "https://monzo.me/" + m[2] : "https://monzo.me/" + m[2] + "/" + amount;
+    }
+    // Cash App: cash.app/$cashtag/amount, in US dollars.
+    if ((m = h.match(/^(?:(?:https?:\/\/)?(?:www\.)?cash\.app\/)?\$([A-Za-z][A-Za-z0-9_]{0,19})$/i))) {
+      var usd = amount && (!currency || currency === "USD");
+      return "https://cash.app/$" + m[1] + (usd ? "/" + amount : "");
+    }
+    // Venmo: venmo.com/u/name?txn=pay&amount=..., also in US dollars. The
+    // handle can be "@name", "venmo.com/name" or the full profile link.
+    if ((m = h.match(/^(?:(?:https?:\/\/)?(?:www\.)?venmo\.com\/(?:u\/)?|@)([A-Za-z0-9_-]{1,30})$/i))) {
+      var url = "https://venmo.com/" + m[1] + "?txn=pay";
+      if (amount && (!currency || currency === "USD")) url += "&amount=" + amount;
+      var text = cleanText(note, 60);
+      if (text) url += "&note=" + encodeURIComponent(text);
+      return url;
+    }
+    return h;
   }
 
   // The message nobody likes writing. Short, friendly, with the numbers.
   // `pays` maps person id to their payment handle, `currency` the ISO code.
   function reminder(name, owes, names, money, title, pays, currency) {
     var how = function (p) {
-      var link = payLink(pays && pays[p.to], p.amount, currency);
+      var link = payLink(pays && pays[p.to], p.amount, currency, title);
       return link ? " (" + link + ")" : "";
     };
     var lines = owes.map(function (p) { return "• " + money(p.amount) + " to " + names[p.to] + how(p); });
