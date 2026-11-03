@@ -121,6 +121,17 @@ test("Venmo links pay the amount and carry the trip as the note", () => {
   assert.equal(E.payLink("@evan", 725, "GBP"), "https://venmo.com/evan?txn=pay");
 });
 
+test("UPI VPAs open a UPI app with the rupee amount", () => {
+  assert.equal(E.payLink("ana@okicici", 12500, "INR"),
+    "upi://pay?pa=ana%40okicici&pn=ana&cu=INR&am=125.00");
+  assert.equal(E.payLink("9876543210@paytm", 5000, "INR", "Goa trip"),
+    "upi://pay?pa=9876543210%40paytm&pn=9876543210&cu=INR&am=50.00&tn=Goa%20trip");
+  // Only rupee splits prefill the amount; another currency falls back to no amount.
+  assert.equal(E.payLink("ana@okicici", 12500, "USD"), "upi://pay?pa=ana%40okicici&pn=ana&cu=INR");
+  // An email address is not a VPA (its domain has a dot), so it passes through.
+  assert.equal(E.payLink("ana@gmail.com", 1000, "INR"), "ana@gmail.com");
+});
+
 test("reminders carry the payee's link", () => {
   const money = (c) => "€" + (c / 100).toFixed(2);
   const text = E.reminder("Ben", [{ from: "b", to: "a", amount: 1250 }], { a: "Ana", b: "Ben" }, money, "Lisbon", { a: "paypal.me/ana" }, "EUR");

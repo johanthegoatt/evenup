@@ -426,6 +426,18 @@
       if (text) url += "&note=" + encodeURIComponent(text);
       return url;
     }
+    // UPI (India): a VPA like name@okicici opens any UPI app with the NPCI
+    // deep link upi://pay?pa=VPA&pn=name&am=amount&cu=INR&tn=note. The bank
+    // handle after @ is letters only, which tells a VPA from an email address.
+    // UPI settles in rupees, so the amount is only prefilled for an INR split.
+    if ((m = h.match(/^([A-Za-z0-9.\-_]{2,})@([A-Za-z]{2,})$/))) {
+      var payee = m[1].split(/[.\-_]/)[0] || "payee";
+      var upi = "upi://pay?pa=" + encodeURIComponent(h) + "&pn=" + encodeURIComponent(payee) + "&cu=INR";
+      if (amount && (!currency || currency === "INR")) upi += "&am=" + amount;
+      var tn = cleanText(note, 50);
+      if (tn) upi += "&tn=" + encodeURIComponent(tn);
+      return upi;
+    }
     return h;
   }
 
