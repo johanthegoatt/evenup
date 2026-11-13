@@ -464,6 +464,38 @@
     return Math.round((amount * p) / 100);
   }
 
+  // Round everyone's balance to whole currency units so the settle-up comes out
+  // in clean amounts and nobody is sending odd cents. The leftover from
+  // rounding is apportioned by largest remainder, which keeps the balances
+  // summing to exactly zero and every amount on the unit grid, so a couple of
+  // people's share shifts by at most one unit. `unitCents` is the unit to round
+  // to (100 = a whole pound/dollar; 5 = round to 5 cents).
+  function roundBalances(bal, unitCents) {
+    var unit = unitCents > 0 ? Math.round(unitCents) : 100;
+    var ids = Object.keys(bal);
+    var base = {}, res = [], sumUnits = 0;
+    ids.forEach(function (id) {
+      var u = Math.floor(bal[id] / unit);
+      base[id] = u;
+      sumUnits += u;
+      res.push({ id: id, r: bal[id] - u * unit });
+    });
+    // The balances sum to zero (a multiple of the unit), so sumUnits units of
+    // rounding need handing back: +1 to the largest remainders, or -1 from the
+    // smallest if we rounded too far.
+    var need = -sumUnits;
+    res.sort(function (a, b) { return b.r - a.r; });
+    var out = {};
+    ids.forEach(function (id) { out[id] = base[id] * unit; });
+    var i;
+    if (need > 0) {
+      for (i = 0; i < need && i < res.length; i++) out[res[i].id] += unit;
+    } else if (need < 0) {
+      for (i = 0; i < -need && i < res.length; i++) out[res[res.length - 1 - i].id] -= unit;
+    }
+    return out;
+  }
+
   return {
     parseAmount: parseAmount,
     parseRate: parseRate,
@@ -479,7 +511,7 @@
     payLink: payLink,
     LIMITS: LIMITS,
     settle: settle,
-    settle: settle,
+    roundBalances: roundBalances,
     settleGreedy: settleGreedy,
     directPayments: directPayments,
     EXACT_LIMIT: EXACT_LIMIT,
