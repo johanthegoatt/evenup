@@ -598,6 +598,9 @@
     copy(E.reminder(nameOf(who), owes, namesMap(), money, state.title, paysMap(), state.currency), "Message for " + nameOf(who) + " copied.");
   });
 
+  var roundToggle = $("round-settle");
+  if (roundToggle) roundToggle.addEventListener("change", function () { renderResult(); });
+
   $("copy-all").addEventListener("click", function () {
     var lines = [(state.title || "Our split") + ", settled with EvenUp:"];
     lastResult.payments.forEach(function (p) {
@@ -740,6 +743,9 @@
     if (!has) { lastResult = { payments: [] }; return; }
 
     var bal = E.balances(state.people, state.expenses);
+    var roundEl = $("round-settle");
+    var rounded = roundEl && roundEl.checked;
+    if (rounded) bal = E.roundBalances(bal, 100);
     var r = E.settle(bal);
     // Keep each person's payments together, so their message covers them all.
     r.payments.sort(function (a, b) { return nameOf(a.from).localeCompare(nameOf(b.from)) || b.amount - a.amount; });

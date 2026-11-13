@@ -364,3 +364,6 @@ details p { margin-top: var(--s2); color: var(--ink-2); max-width: 62ch; }
 }
 .tip-chips button:hover { border-color: var(--green); }
 .tip-chips button.on { background: var(--green); border-color: var(--green); color: var(--green-ink); }
+
+.round-opt { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted, #667); margin: 0 0 10px; }
+.round-opt input { width: auto; }
