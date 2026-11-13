@@ -152,3 +152,33 @@ test("pay handles survive a share link", () => {
   assert.equal(back.people[0].pay, "paypal.me/ana");
   assert.equal(back.people[1].pay, undefined);
 });
+
+test("roundBalances keeps the total at zero and on the unit grid", () => {
+  // Three people, odd-cent balances that sum to zero.
+  const bal = { a: 1234, b: -567, c: -667 };
+  const r = E.roundBalances(bal, 100);
+  const total = r.a + r.b + r.c;
+  assert.equal(total, 0, "still balanced");
+  [r.a, r.b, r.c].forEach((v) => assert.equal(Math.abs(v) % 100, 0, "a whole unit"));
+});
+
+test("roundBalances shifts each person by less than one unit", () => {
+  const bal = { a: 1234, b: -567, c: -667 };
+  const r = E.roundBalances(bal, 100);
+  assert.ok(Math.abs(r.a - bal.a) < 100);
+  assert.ok(Math.abs(r.b - bal.b) < 100);
+  assert.ok(Math.abs(r.c - bal.c) < 100);
+});
+
+test("roundBalances can round to five cents", () => {
+  const bal = { a: 103, b: -103 };
+  const r = E.roundBalances(bal, 5);
+  assert.equal(r.a + r.b, 0);
+  assert.equal(Math.abs(r.a) % 5, 0);
+});
+
+test("already-round balances are left alone", () => {
+  const bal = { a: 500, b: -300, c: -200 };
+  const r = E.roundBalances(bal, 100);
+  assert.deepEqual(r, bal);
+});
