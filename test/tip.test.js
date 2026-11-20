@@ -86,3 +86,17 @@ test("old links with no tip still read", function () {
   var back = E.unpack(E.pack(state));
   assert.strictEqual(E.tipOf(back.expenses[0]), 0);
 });
+
+test("tipping on the pre-tax subtotal uses the amount minus the tax", function () {
+  // $50 bill including $4 tax -> tip 20% on $46 = $9.20, not $10.
+  assert.strictEqual(E.tipFromPercent(5000, 20, 400), 920);
+  // No tax passed -> tips on the whole amount, as before.
+  assert.strictEqual(E.tipFromPercent(5000, 20), 1000);
+  // A tax of zero or nonsense falls back to the whole amount.
+  assert.strictEqual(E.tipFromPercent(5000, 20, 0), 1000);
+  assert.strictEqual(E.tipFromPercent(5000, 20, NaN), 1000);
+});
+
+test("pre-tax tip never goes below zero if the tax is silly-large", function () {
+  assert.strictEqual(E.tipFromPercent(5000, 20, 9000), 0);
+});
