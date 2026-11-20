@@ -112,6 +112,11 @@
                   <label for="tip-pct">Or type a %</label>
                   <input id="tip-pct" type="text" inputmode="decimal" placeholder="15" autocomplete="off" aria-describedby="tip-out">
                 </div>
+                <label class="fx-toggle"><input type="checkbox" id="tip-pretax"> <span>Tip on the pre-tax amount</span></label>
+                <div class="field narrow" id="tip-tax-field" hidden>
+                  <label for="tip-tax">Tax on the bill</label>
+                  <input id="tip-tax" type="text" inputmode="decimal" placeholder="4.00" autocomplete="off">
+                </div>
                 <p class="fx-out" id="tip-out" aria-live="polite"></p>
                 <p class="hint">Shared the same way as the bill, so whoever ate more pays a bit more of it.</p>
               </div>

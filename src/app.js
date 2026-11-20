@@ -406,9 +406,18 @@
     if (f.on && f.rate) { var h = E.convert(amount, f.rate); return h > 0 ? h : 0; }
     return amount;
   }
+  // The tax on the bill, in home money, only when tipping on the pre-tax amount.
+  function taxCents() {
+    if (!$("tip-pretax").checked) return 0;
+    var t = E.parseAmount($("tip-tax").value);
+    if (!(t > 0)) return 0;
+    var f = fx();
+    if (f.on && f.rate) { var h = E.convert(t, f.rate); return h > 0 ? h : 0; }
+    return t;
+  }
   function tipCents() {
     if (!$("tip-on").checked) return 0;
-    return E.tipFromPercent(homeAmount(), $("tip-pct").value);
+    return E.tipFromPercent(homeAmount(), $("tip-pct").value, taxCents());
   }
   function tipPreview() {
     var out = $("tip-out");
@@ -417,7 +426,9 @@
     var home = homeAmount();
     if (!(pct > 0)) { out.textContent = "Pick or type a tip."; return; }
     if (!(home > 0)) { out.textContent = "Type the amount first."; return; }
-    out.textContent = "Adds " + money(E.tipFromPercent(home, pct)) + " on top, shared out.";
+    var tax = taxCents();
+    out.textContent = "Adds " + money(E.tipFromPercent(home, pct, tax)) + " on top, shared out." +
+      (tax > 0 ? " (Tipped on " + money(home - tax) + ", before tax.)" : "");
     [].forEach.call($("tip-chips").children, function (b) {
       b.classList.toggle("on", b.getAttribute("data-pct") === String(pct));
     });
@@ -433,6 +444,12 @@
     tipPreview();
   });
   $("tip-pct").addEventListener("input", tipPreview);
+  $("tip-pretax").addEventListener("change", function () {
+    $("tip-tax-field").hidden = !this.checked;
+    if (this.checked) $("tip-tax").focus();
+    tipPreview();
+  });
+  $("tip-tax").addEventListener("input", tipPreview);
   $("amount").addEventListener("input", tipPreview);
   $("split-rows").addEventListener("input", preview);
   $("split-rows").addEventListener("change", preview);
