@@ -458,10 +458,17 @@
 
   // Tip in whole cents for a percent of an amount, rounded half up. Handles
   // "12.5" as readily as "15", and never goes below zero.
-  function tipFromPercent(amount, percent) {
+  // The tip for a percentage. If you pass the tax on the bill, the tip is worked
+  // out on the pre-tax amount, which is the etiquette standard (Emily Post and
+  // most US dining guides): you tip on the food and drink, not on the sales tax,
+  // since the tax isn't the server's to earn. Leave the tax out and it tips on
+  // the whole amount, the way a lot of card machines default to.
+  function tipFromPercent(amount, percent, taxCents) {
     var p = typeof percent === "number" ? percent : parseFloat(String(percent).replace(",", "."));
     if (!(p > 0) || !(amount > 0)) return 0;
-    return Math.round((amount * p) / 100);
+    var tax = Number.isSafeInteger(taxCents) && taxCents > 0 ? taxCents : 0;
+    var base = Math.max(0, amount - tax);   // the pre-tax subtotal to tip on
+    return Math.round((base * p) / 100);
   }
 
   // Round everyone's balance to whole currency units so the settle-up comes out
